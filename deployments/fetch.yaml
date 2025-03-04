@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stock-fetcher
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stock-fetcher
+  template:
+    metadata:
+      labels:
+        app: stock-fetcher
+    spec:
+      containers:
+      - name: stock-fetcher
+        image: stock-fetcher:latest
+        env:
+        - name: KAFKA_BROKER
+          value: "kafka:9092"
+
