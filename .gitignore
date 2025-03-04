@@ -1,1 +1,4 @@
 .env
+
+# Ignore Kubernetes ConfigMaps containing secrets
+deployments/stock-tracker-env.yaml
