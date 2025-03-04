@@ -15,17 +15,6 @@ spec:
       containers:
       - name: kafka-consumer
         image: kafka-consumer:latest
-        env:
-        - name: KAFKA_BROKER
-          value: "kafka:9092"
-        - name: POSTGRES_HOST
-          value: "timescaledb"
-        - name: POSTGRES_DB
-          value: "stock_data"
-        - name: POSTGRES_USER
-          value: "stock_user"
-        - name: POSTGRES_PASSWORD
-          value: "stock_password"
-        - name: REDIS_HOST
-          value: "redis"
-        command: ["python", "/app/kafka_to_timescale.py"]
+        envFrom:
+        - configMapRef:
+            name: stock-tracker-env
