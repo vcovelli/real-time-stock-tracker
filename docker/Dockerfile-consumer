@@ -1,7 +1,12 @@
 FROM python:3.9
 
 WORKDIR /app
-COPY kafka_to_timescale.py requirements.txt ./
+
+# Copy script from src/
+COPY src/kafka_to_timescale.py ./
+
+# Correct the path for requirements.txt
+COPY requirements.txt ./
 
 RUN pip install -r requirements.txt
 
