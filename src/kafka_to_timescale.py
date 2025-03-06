@@ -10,7 +10,7 @@ POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")  # Default to localhost 
 POSTGRES_DB = os.getenv("POSTGRES_DB", "stock_data")
 POSTGRES_USER = os.getenv("POSTGRES_USER", "stock_user")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "stock_password")
-KAFKA_BROKER = os.getenv("KAFKA_BROKER", "localhost:9092")
+KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:9092")
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 
