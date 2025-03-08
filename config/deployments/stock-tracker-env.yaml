@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stock-tracker-env
+data:
+  POSTGRES_HOST: "timescaledb"
+  POSTGRES_DB: "stock_data"
+  POSTGRES_USER: "stock_user"
+  POSTGRES_PASSWORD: "supersecurepassword"
+  KAFKA_BROKER: "kafka:9092"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
