@@ -34,26 +34,35 @@ pg_connection.autocommit = True
 # Redis Connection
 redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0)
 
-# Ensure the table exists
 pg_cursor = pg_connection.cursor()
+
+# Create table (if not exists)
 pg_cursor.execute("""
     CREATE TABLE IF NOT EXISTS stock_prices (
-        id SERIAL PRIMARY KEY,
         symbol VARCHAR(10),
         timestamp TIMESTAMPTZ NOT NULL,
         open NUMERIC(10, 2),
         high NUMERIC(10, 2),
         low NUMERIC(10, 2),
         close NUMERIC(10, 2),
-        volume BIGINT
+        volume BIGINT,
+        PRIMARY KEY (symbol, timestamp)
     );
 """)
+
+# Check if stock_prices is already a hypertable
 pg_cursor.execute("""
-    SELECT create_hypertable('stock_prices', 'timestamp')
-    WHERE NOT EXISTS (
-        SELECT * FROM timescaledb_information.hypertables WHERE hypertable_name='stock_prices'
-    );
+    SELECT COUNT(*) FROM timescaledb_information.hypertables WHERE hypertable_name = 'stock_prices';
 """)
+is_hypertable = pg_cursor.fetchone()[0]
+
+# Create hypertable ONLY if it does not exist
+if is_hypertable == 0:
+    print("Creating TimescaleDB hypertable...")
+    pg_cursor.execute("SELECT create_hypertable('stock_prices', 'timestamp');")
+else:
+    print("✅ TimescaleDB hypertable already exists, skipping creation.")
+
 
 # Function to insert stock data into TimescaleDB and cache latest price in Redis
 def insert_into_timescaledb(record):
