@@ -1,13 +1,12 @@
-FROM python:3.9
+FROM python:3.9-slim
 
 WORKDIR /app
 
-# Copy script from src/
+# Copy and install dependencies
+COPY requirements/fetcher.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy fetcher script
 COPY src/fetch_stock_data.py ./
-
-# Correct the path for requirements.txt
-COPY requirements.txt ./
-
-RUN pip install -r requirements.txt
 
 CMD ["python", "fetch_stock_data.py"]

@@ -1,13 +1,17 @@
-FROM python:3.9
+FROM python:3.9-slim
 
 WORKDIR /app
 
-# Copy script from src/
+# Install system dependencies for psycopg2
+RUN apt-get update && apt-get install -y \
+    libpq-dev gcc && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy and install consumer-specific dependencies
+COPY requirements/consumer.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy consumer script
 COPY src/kafka_to_timescale.py ./
-
-# Correct the path for requirements.txt
-COPY requirements.txt ./
-
-RUN pip install -r requirements.txt
 
 CMD ["python", "kafka_to_timescale.py"]
