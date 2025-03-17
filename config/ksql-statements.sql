@@ -1,7 +1,7 @@
 -- Create raw_trades stream
 CREATE STREAM raw_trades (
     symbol STRING,
-    timestamp BIGINT,
+    timestamp STRING,
     price DOUBLE,
     "size" BIGINT
 ) 
@@ -18,7 +18,7 @@ CREATE TABLE ohlc_candles WITH (
     REPLICAS = 1
 ) AS
     SELECT
-        symbol,  -- This becomes the PRIMARY KEY
+        symbol,  -- PRIMARY KEY
         WINDOWSTART AS bucket_start,
         EARLIEST_BY_OFFSET(price) AS open,
         MAX(price) AS high,
