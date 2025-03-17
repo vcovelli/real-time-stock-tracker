@@ -6,21 +6,30 @@ import json
 import datetime
 
 # Load environment variables
-POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")  # Default to localhost if not set
-POSTGRES_DB = os.getenv("POSTGRES_DB", "stock_data")
-POSTGRES_USER = os.getenv("POSTGRES_USER", "stock_user")
-POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "stock_password")
-KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:9092")
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+POSTGRES_HOST = os.getenv("POSTGRES_HOST")
+POSTGRES_DB = os.getenv("POSTGRES_DB")
+POSTGRES_USER = os.getenv("POSTGRES_USER")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
+KAFKA_BROKER = os.getenv("KAFKA_BROKER")
+REDIS_HOST = os.getenv("REDIS_HOST")
+REDIS_PORT = int(os.getenv("REDIS_PORT"))
+
+# Dynamically select topic
+KAFKA_TOPIC_OHLC = os.getenv("KAFKA_TOPIC_OHLC", "ohlc-data")
 
 # Kafka Consumer Configuration
 consumer = KafkaConsumer(
-    'stock-data',
+    KAFKA_TOPIC_OHLC,
     bootstrap_servers=KAFKA_BROKER,
     auto_offset_reset='earliest',
     value_deserializer=lambda x: json.loads(x.decode('utf-8'))
 )
+
+print(f"🔄 Listening for OHLC updates on `{KAFKA_TOPIC_OHLC}`...")
+
+for message in consumer:
+    record = message.value
+    print(f"📊 Received OHLC data: {record}")
 
 # PostgreSQL (TimescaleDB) Connection Configuration
 pg_connection = psycopg2.connect(
@@ -72,7 +81,7 @@ def insert_into_timescaledb(record):
             VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (
             record['symbol'],
-            record['timestamp'],
+            record['bucket_start'],
             record['open'],
             record['high'],
             record['low'],
