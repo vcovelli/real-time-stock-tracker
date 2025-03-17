@@ -4,13 +4,19 @@ import websocket
 from kafka import KafkaProducer
 
 # Load environment variables
-ALPACA_API_KEY = os.getenv("ALPACA_API_KEY")
-ALPACA_SECRET_KEY = os.getenv("ALPACA_SECRET_KEY")
-KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:9092")
-KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "stock-data")
+KAFKA_BROKER = os.getenv("KAFKA_BROKER", "localhost:9092") # Default to localhost
 
-# WebSocket URL for real-time stock data
-STREAM_URL = "wss://stream.data.alpaca.markets/v2/iex"
+# Dynamically select topic
+KAFKA_TOPIC_TRADES = os.getenv("KAFKA_TOPIC_TRADES", "stock-data")
+
+# Toggle between Alpaca and Mock WebSocket
+USE_MOCK = True  # Set to False to switch back to Alpaca
+
+# WebSocket URL
+if USE_MOCK:
+    STREAM_URL = "ws://host.docker.internal:8765"  # Mock server
+else:
+    STREAM_URL = "wss://stream.data.alpaca.markets/v2/iex"  # Real Alpaca WebSocket
 
 # Kafka Producer
 producer = KafkaProducer(
@@ -25,14 +31,14 @@ def on_message(ws, message):
     for event in data:
         if event["T"] == "t":  # Trade update
             stock_record = {
-                "symbol": event["S"],  # Stock symbol
-                "timestamp": event["t"],  # Event timestamp
-                "price": event["p"],  # Trade price
-                "size": event["s"]  # Trade size
+                "symbol": event["S"],
+                "timestamp": event["t"],
+                "price": event["p"],
+                "size": event["s"]
             }
 
             print(f"📡 Sending to Kafka: {stock_record}")
-            producer.send(KAFKA_TOPIC, stock_record)
+            producer.send(KAFKA_TOPIC_TRADES, stock_record)
 
 def on_error(ws, error):
     """Handle WebSocket errors"""
@@ -44,19 +50,20 @@ def on_close(ws, close_status_code, close_msg):
     start_streaming()
 
 def on_open(ws):
-    """Authenticate and subscribe to Alpaca WebSocket"""
-    auth_message = {
-        "action": "auth",
-        "key": ALPACA_API_KEY,
-        "secret": ALPACA_SECRET_KEY
-    }
-    ws.send(json.dumps(auth_message))
+    """Authenticate and subscribe (only needed for Alpaca)"""
+    if not USE_MOCK:
+        auth_message = {
+            "action": "auth",
+            "key": os.getenv("ALPACA_API_KEY"),
+            "secret": os.getenv("ALPACA_SECRET_KEY")
+        }
+        ws.send(json.dumps(auth_message))
 
-    subscribe_message = {
-        "action": "subscribe",
-        "trades": ["AAPL", "GOOG", "TSLA"]  # Add more stocks if needed
-    }
-    ws.send(json.dumps(subscribe_message))
+        subscribe_message = {
+            "action": "subscribe",
+            "trades": ["AAPL"]
+        }
+        ws.send(json.dumps(subscribe_message))
 
 def start_streaming():
     """Start WebSocket connection"""
