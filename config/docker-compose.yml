@@ -3,28 +3,48 @@ services:
   zookeeper:
     image: wurstmeister/zookeeper:latest
     container_name: zookeeper
+    volumes:
+      - zookeeper-data:/opt/zookeeper-3.4.13/data
+      - zookeeper-datalog:/opt/zookeeper-3.4.13/datalog
+    environment:
+      ZOOKEEPER_DATA_DIR: "/opt/zookeeper-3.4.13/data"
+      ZOOKEEPER_DATALOG_DIR: "/opt/zookeeper-3.4.13/datalog"
     networks:
       - stock-tracker-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 5s
+      retries: 5
+      start_period: 10s
 
 # Kafka
   kafka:
     image: wurstmeister/kafka:latest
     container_name: kafka
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+      #- ../init-scripts/kafka:/opt/init-scripts
     environment:
-      KAFKA_ZOOKEEPER_CONNECT: ${KAFKA_ZOOKEEPER_CONNECT}
-      KAFKA_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CLUSTER_ID: "Db2qmDeuTR-Xa8Z0aqqa3g"
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://:9092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: ${KAFKA_REPLICATION_FACTOR}
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_DIRS: "/var/lib/kafka/data"
+      KAFKA_LOG_RETENTION_MS: "-1"
+      KAFKA_LOG_SEGMENT_BYTES: "1073741824"
     depends_on:
-      - zookeeper
+      zookeeper:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "kafka-topics.sh", "--list", "--bootstrap-server", "${KAFKA_BROKER}"]
+      test: ["CMD", "kafka-topics.sh", "--list", "--bootstrap-server", "kafka:9092"]
       interval: 10s
       timeout: 5s
       retries: 5
     ports:
-      - "9092:9092" 
+      - "9092:9092"
     networks:
       - stock-tracker-network
 
@@ -35,17 +55,21 @@ services:
     restart: always
     environment:
       KSQL_BOOTSTRAP_SERVERS: "kafka:9092"
+      KSQL_KSQL_SERVICE_ID: "default_"
+      KSQL_KSQL_PERSISTENT_QUERY_NAME_PREFIX: "query_"
+      KSQL_KSQL_EXTENSION_DIR: "/etc/ksql/ext"
       KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE: "true"
       KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE: "true"
-      KSQL_HEAP_OPTS: "-Xmx2g -Xms1g"
+      KSQL_KSQL_STREAMS_REPLICATION_FACTOR: "1"
+      KSQL_KSQL_STREAMS_NUM_STREAM_THREADS: "4"
+      KSQL_KSQL_STREAMS_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KSQL_KSQL_RECOVER_FROM_COMMAND_TOPIC: "true"
+      KSQL_SUPPORT_METRICS_ENABLE: "false"
+    volumes:
+      - ksqldb-data:/var/lib/ksql
+      #- ../init-scripts/ksqldb:/init-scripts
     ports:
       - "8088:8088"
-    volumes:
-      - type: bind
-        source: ./ksql-statements.sql
-        target: /config/ksql-statements.sql
-    depends_on:
-      - kafka
     networks:
       - stock-tracker-network
 
@@ -55,11 +79,7 @@ services:
     container_name: ksqldb-cli
     depends_on:
       - ksqldb-server
-    volumes:
-    - type: bind
-      source: ./ksql-statements.sql
-      target: /config/ksql-statements.sql
-    entrypoint: /bin/sh
+    entrypoint: /bin/sh -c "sleep 10 && ksql http://ksqldb-server:8088"
     tty: true
     networks:
       - stock-tracker-network
@@ -71,12 +91,16 @@ services:
       dockerfile: docker/Dockerfile-consumer
     container_name: kafka-consumer
     env_file:
-      - .env
+      - ../config/.env
+    environment:
+      KAFKA_BROKER: "kafka:9092"
+    volumes:
+      - ../logs/kafka-consumer:/app/logs
     depends_on:
       kafka:
         condition: service_healthy
       redis:
-        condition: service_started  
+        condition: service_started
       timescaledb:
         condition: service_healthy
     networks:
@@ -102,6 +126,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - pgdata:/var/lib/postgresql/data
+      #- ../init-scripts/timescaledb:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -118,6 +143,10 @@ services:
     container_name: stock-fetcher
     env_file:
       - .env
+    environment:
+      KAFKA_BROKER: "kafka:9092"
+    volumes:
+      - ../logs/stock-fetcher:/app/logs
     depends_on:
       kafka:
         condition: service_healthy
@@ -127,6 +156,15 @@ services:
 
 volumes:
   pgdata:
+    name: config_pgdata
+  kafka-data:
+    name: config_kafka-data
+  zookeeper-data:
+    name: config_zookeeper-data 
+  zookeeper-datalog:
+    name: config_zookeeper-datalog
+  ksqldb-data:
+    name: config_ksqldb-data
 
 networks:
   stock-tracker-network:
