@@ -1,109 +1,102 @@
 import os
-from kafka import KafkaConsumer
+from dotenv import load_dotenv
+import json
+import time
 import psycopg2
 import redis
-import json
+from kafka import KafkaConsumer
 import datetime
 
 # Load environment variables
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', 'config', '.env'))
+
 POSTGRES_HOST = os.getenv("POSTGRES_HOST")
 POSTGRES_DB = os.getenv("POSTGRES_DB")
 POSTGRES_USER = os.getenv("POSTGRES_USER")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
-KAFKA_BROKER = os.getenv("KAFKA_BROKER")
+KAFKA_BROKER_DOCKER = os.getenv("KAFKA_BROKER_DOCKER")
 REDIS_HOST = os.getenv("REDIS_HOST")
-REDIS_PORT = int(os.getenv("REDIS_PORT"))
-
-# Dynamically select topic
+REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 KAFKA_TOPIC_OHLC = os.getenv("KAFKA_TOPIC_OHLC", "ohlc-data")
-
-# Kafka Consumer Configuration
-consumer = KafkaConsumer(
-    KAFKA_TOPIC_OHLC,
-    bootstrap_servers=KAFKA_BROKER,
-    auto_offset_reset='earliest',
-    value_deserializer=lambda x: json.loads(x.decode('utf-8'))
-)
-
-print(f"🔄 Listening for OHLC updates on `{KAFKA_TOPIC_OHLC}`...")
-
-for message in consumer:
-    record = message.value
-    print(f"📊 Received OHLC data: {record}")
-
-# PostgreSQL (TimescaleDB) Connection Configuration
-pg_connection = psycopg2.connect(
-    host=POSTGRES_HOST,
-    database=POSTGRES_DB,
-    user=POSTGRES_USER,
-    password=POSTGRES_PASSWORD
-)
-pg_connection.autocommit = True
 
 # Redis Connection
 redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0)
 
-pg_cursor = pg_connection.cursor()
-
-# Create table (if not exists)
-pg_cursor.execute("""
-    CREATE TABLE IF NOT EXISTS stock_prices (
-        symbol VARCHAR(10),
-        timestamp TIMESTAMPTZ NOT NULL,
-        open NUMERIC(10, 2),
-        high NUMERIC(10, 2),
-        low NUMERIC(10, 2),
-        close NUMERIC(10, 2),
-        volume BIGINT,
-        PRIMARY KEY (symbol, timestamp)
-    );
-""")
-
-# Check if stock_prices is already a hypertable
-pg_cursor.execute("""
-    SELECT COUNT(*) FROM timescaledb_information.hypertables WHERE hypertable_name = 'stock_prices';
-""")
-is_hypertable = pg_cursor.fetchone()[0]
-
-# Create hypertable ONLY if it does not exist
-if is_hypertable == 0:
-    print("Creating TimescaleDB hypertable...")
-    pg_cursor.execute("SELECT create_hypertable('stock_prices', 'timestamp');")
-else:
-    print("✅ TimescaleDB hypertable already exists, skipping creation.")
-
-
-# Function to insert stock data into TimescaleDB and cache latest price in Redis
 def insert_into_timescaledb(record):
     try:
-        pg_cursor.execute("""
-            INSERT INTO stock_prices (symbol, timestamp, open, high, low, close, volume)
+        record = {k.lower(): v for k, v in record.items()}
+        required_fields = {'symbol_value', 'bucket_start', 'open', 'high', 'low', 'close', 'volume'}
+        if not required_fields.issubset(record):
+            return
+
+        timestamp_seconds = datetime.datetime.utcfromtimestamp(record['bucket_start'] / 1000)
+
+        sql_query = """
+            INSERT INTO stock_prices (symbol, "timestamp", open, high, low, close, volume)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, (
-            record['symbol'],
-            record['bucket_start'],
-            record['open'],
-            record['high'],
-            record['low'],
-            record['close'],
-            record['volume']
-        ))
+            ON CONFLICT (symbol, "timestamp") 
+            DO UPDATE 
+            SET open = EXCLUDED.open, high = EXCLUDED.high, low = EXCLUDED.low, close = EXCLUDED.close, volume = EXCLUDED.volume;
+        """
+        sql_params = (
+            record['symbol_value'],
+            timestamp_seconds,
+            float(record['open']),
+            float(record['high']),
+            float(record['low']),
+            float(record['close']),
+            int(record['volume'])
+        )
 
-        # Cache the latest stock price in Redis (symbol: latest price)
-        redis_client.set(record['symbol'], json.dumps(record))
+        with psycopg2.connect(
+            host=POSTGRES_HOST,
+            database=POSTGRES_DB,
+            user=POSTGRES_USER,
+            password=POSTGRES_PASSWORD
+        ) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(sql_query, sql_params)
+                conn.commit()
 
-        print(f"Inserted into TimescaleDB & Cached in Redis: {record}")
+        redis_key = f"stock_price:{record['symbol_value']}"
+        redis_value = json.dumps({
+            "timestamp": timestamp_seconds.isoformat(),
+            "open": record['open'],
+            "high": record['high'],
+            "low": record['low'],
+            "close": record['close'],
+            "volume": record['volume']
+        })
+        redis_client.set(redis_key, redis_value)
+
+        print(f"✅ {record['symbol_value']} @ {timestamp_seconds}: stored & cached")
+
+    except psycopg2.Error as db_error:
+        print(f"❌ DB error: {db_error}")
     except Exception as e:
-        print(f"Error inserting into TimescaleDB: {e}")
+        print(f"❌ Error: {e}")
 
-# Start consuming Kafka messages
-print("Starting Kafka consumer...")
-for message in consumer:
-    record = message.value
-    print("Received data:", record)  # Inspect the incoming data
-    insert_into_timescaledb(record)
+def start_kafka_consumer():
+    while True:
+        try:
+            print("🔄 Kafka consumer started...")
 
-# Cleanup
-pg_cursor.close()
-pg_connection.close()
+            consumer = KafkaConsumer(
+                KAFKA_TOPIC_OHLC,
+                bootstrap_servers=KAFKA_BROKER_DOCKER,
+                auto_offset_reset='latest',
+                enable_auto_commit=True,
+                value_deserializer=lambda x: json.loads(x.decode('utf-8'))
+            )
 
+            for message in consumer:
+                insert_into_timescaledb(message.value)
+
+        except Exception as e:
+            print(f"⚠️ Kafka error: {e}, retrying in 5s...")
+            time.sleep(5)
+        finally:
+            consumer.close()
+
+if __name__ == "__main__":
+    start_kafka_consumer()

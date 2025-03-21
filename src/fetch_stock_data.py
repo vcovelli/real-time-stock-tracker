@@ -2,6 +2,9 @@ import os
 import json
 import websocket
 from kafka import KafkaProducer
+from dotenv import load_dotenv
+
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', 'config', '.env'))
 
 # Load environment variables
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "localhost:9092") # Default to localhost

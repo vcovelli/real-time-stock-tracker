@@ -1,3 +1,5 @@
-kafka-python
-alpaca-trade-api
-requests
+kafka-python==2.0.2
+websocket-client==1.7.0
+python-dotenv==1.0.1
+requests==2.31.0
+alpaca-trade-api==1.6.1
