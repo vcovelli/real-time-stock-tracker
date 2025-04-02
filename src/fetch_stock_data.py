@@ -13,7 +13,7 @@ KAFKA_BROKER = os.getenv("KAFKA_BROKER", "localhost:9092") # Default to localhos
 KAFKA_TOPIC_TRADES = os.getenv("KAFKA_TOPIC_TRADES", "stock-data")
 
 # Toggle between Alpaca and Mock WebSocket
-USE_MOCK = True  # Set to False to switch back to Alpaca
+USE_MOCK = False  # Set to False to switch back to Alpaca
 
 # WebSocket URL
 if USE_MOCK:
@@ -57,8 +57,8 @@ def on_open(ws):
     if not USE_MOCK:
         auth_message = {
             "action": "auth",
-            "key": os.getenv("ALPACA_API_KEY"),
-            "secret": os.getenv("ALPACA_SECRET_KEY")
+            "key": os.getenv("PKBKPN52EK5TF74JA10B"),
+            "secret": os.getenv("CgbYecfSgLjFfO3Fc01XVcOF7KA39vH6Cx9JxvMZ")
         }
         ws.send(json.dumps(auth_message))
 
