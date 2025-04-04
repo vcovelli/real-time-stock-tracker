@@ -59,7 +59,7 @@ A scalable real-time stock tracking platform that fetches market data from Alpac
 ```
 python3 scripts/fetch_stock_data.py
 ```
-Can switch between Alpaca and mock websocket via .env flag USE_MOCK=True
+- Can switch between Alpaca and mock websocket via .env flag USE_MOCK=True
 
 ### Consumer (Kafka ➝ Postgres)
 ```
@@ -80,10 +80,10 @@ CREATE TABLE stock_prices (
     volume BIGINT
 );
 ```
+## Enable TimescaleDB
 ```
 SELECT create_hypertable('stock_prices', 'timestamp');
 ```
-Enable TimescaleDB
 ---
 ## Monitoring
 - Prometheus scrapes service metrics
