@@ -1,6 +1,6 @@
 # Real-Time Stock Tracker
 
-This project is a real-time stock tracking application that fetches stock data, streams it to Kafka, and stores it in a PostgreSQL database. The data pipeline allows you to monitor stock prices in real-time, making it ideal for financial analysis, trading insights, and data visualizations.
+A scalable real-time stock tracking platform that fetches market data from Alpaca, streams it through Kafka, and stores it in PostgreSQL for analysis. Designed for financial insight, algorithmic trading, and future-ready dashboards.
 
 ## Table of Contents
 - [Overview](#overview)
@@ -10,12 +10,26 @@ This project is a real-time stock tracking application that fetches stock data, 
 - [Usage](#usage)
 - [Future Enhancements](#future-enhancements)
 
+## Features
+- Real-time stock price ingestion via **Alpaca API**
+- Streamed data using **Kafka** (websocket + mock support)
+- Stored in **PostgreSQL (TimescaleDB)** for time-series optimization
+- Candlestick chart data generated using **ksqlDB**
+- Monitoring with **Prometheus + Grafana**
+- Dockerized microservices
+- Kubernetes-ready deployments
+- Local mock market generator for testing
+
 ## Architecture
 
-1. **Producer Script (`fetch_stock_data.py`)**: Fetches stock data from Yahoo Finance API and streams it to a Kafka topic (`stock-data`).
-2. **Kafka Broker**: Receives data from the producer and holds it until the consumer retrieves it.
-3. **Consumer Script (`kafka_to_postgres.py`)**: Reads data from the Kafka topic and stores it in a PostgreSQL table.
-4. **PostgreSQL Database**: Stores historical stock data for analysis and visualization.
+┌────────────┐     ┌────────────┐     ┌────────────┐     ┌────────────┐
+│  Alpaca    │ --> │  Producer  │ --> │   Kafka    │ --> │  Consumer  │
+└────────────┘     └────────────┘     └────────────┘     └────────────┘
+                                                         |
+                                                  ┌──────▼──────┐
+                                                  │ PostgreSQL  │
+                                                  └─────────────┘
+Optional flow: Kafka ➝ ksqlDB ➝ OHLC ➝ PostgreSQL
 
 ## Technologies Used
 
@@ -28,61 +42,64 @@ This project is a real-time stock tracking application that fetches stock data, 
 
 ### Prerequisites
 
-Ensure you have the following installed:
-- **Docker** and **Docker-Compose**
-- **Python 3** and required libraries (`kafka-python`, `psycopg2`, `yfinance`)
+- Python 3.10+
+- Docker & Docker Compose
+- Alpaca API credentials (optional for live data)
 
-### Installation
+### Clone the Repository
 
-1. **Clone the Repository**
-   ```bash
+```
    git clone https://github.com/yourusername/real-time-stock-tracker.git
+```
+```
    cd real-time-stock-tracker
+```
 
-2. **Install Python Dependencies**
-
-	pip install -r requirements.txt
-
-3. **Start Docker Services**
-	Start Zookeeper, Kafka, and PostgreSQL with Docker Compose:
-
+### Start Services
+```
 	docker-compose up -d
-
-4. **Initialize the PostgreSQL Database**
-	Access PostgreSQL in the Docker container:
-
-	docker exec -it postgres psql -U stock_user -d stock_data
-
-	Create the table schema:
-
-	CREATE TABLE stock_prices (
-	    id SERIAL PRIMARY KEY,
-	    symbol VARCHAR(10),
-	    timestamp TIMESTAMPTZ NOT NULL,
-	    open NUMERIC,
-	    high NUMERIC,
-	    low NUMERIC,
-	    close NUMERIC,
-	    volume BIGINT
-	);
+```
+Includes Zookeeper, Kafka, PostgreSQL, and mock producer setup.
 
 ## Usage
 
-1. **Start the Kafka Producer**: This script fetches stock data and sends it to Kafka.
-   ```bash
-   python3 fetch_stock_data.py
+### Producer (WebSocket or Mock)
+```
+python3 scripts/fetch_stock_data.py
+```
+Can switch between Alpaca and mock websocket via .env flag USE_MOCK=True
 
-2. **Start the Kafka Consumer**: This script read data from Kafka and inserts it into PostgreSQl
+### Consumer (Kafka ➝ Postgres)
+```
+python3 scripts/kafka_to_postgres.py
+```
+Streams real-time prices into the stock_prices table
 
-	python3 kafka_to_postgres.py
+## PostgreSQL Schema
+CREATE TABLE stock_prices (
+	id SERIAL PRIMARY KEY,
+	symbol VARCHAR(10),
+	timestamp TIMESTAMPTZ NOT NULL,
+	open NUMERIC,
+	high NUMERIC,
+	low NUMERIC,
+	close NUMERIC,
+	volume BIGINT
+);
 
-3. **Query Data in PostgreSQL**: After running both scripts, you can query data in PostgreSQL to view real-time stock updates:
+## Monitoring
+- Prometheus scrapes service metrics
+- Grafana dashboards visualize Kafka health, consumer lag, and DB writes
+- Setup lives in config/monitoring/
 
-	SELECT * FROM stock_prices LIMIT 5;
+## Testing
+- Run mock_market_generator.py to simulate closed market conditions
+- Switch between test and production configs using .env
 
 ## Future Enhancements
 
-- **Real-Time Dashboard**: Add a visualization tool (e.g., Tableau, Grafana) to monitor real-time stock data.
-- **Data Analysis**: Implement statistical analyses or machine learning models to gain insights from historical stock data.
-- **Additional Symbols**: Extend the script to fetch data for multiple stock symbols.
-
+- Live candlestick chart visualizations in React or Streamlit
+- ML models for anomaly detection and strategy backtesting
+- RBAC for dashboard access control
+- Web UI for selecting stock symbols on the fly
+- Level 2 market data
