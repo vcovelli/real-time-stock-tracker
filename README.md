@@ -1,7 +1,6 @@
 # Real-Time Stock Tracker
 
 A scalable real-time stock tracking platform that fetches market data from Alpaca, streams it through Kafka, and stores it in PostgreSQL for analysis. Designed for financial insight, algorithmic trading, and future-ready dashboards.
----
 ## Table of Contents
 - [Overview](#overview)
 - [Architecture](#architecture)
@@ -52,7 +51,7 @@ A scalable real-time stock tracking platform that fetches market data from Alpac
 ```
 	docker-compose up -d
 ```
-Includes Zookeeper, Kafka, PostgreSQL, and mock producer setup.
+- Includes Zookeeper, Kafka, PostgreSQL, and mock producer setup.
 ---
 ## Usage
 
@@ -66,7 +65,7 @@ Can switch between Alpaca and mock websocket via .env flag USE_MOCK=True
 ```
 python3 scripts/kafka_to_postgres.py
 ```
-Streams real-time prices into the stock_prices table
+- Streams real-time prices into the stock_prices table
 ---
 ## PostgreSQL Schema
 ```
